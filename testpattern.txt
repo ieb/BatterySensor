@@ -1,0 +1,63 @@
+# contains a test patter of modbus.
+# Modbus ASCII Decimal format
+# starts with a $ for decimal
+# numbers > 255 are read as 2 a bigendian 16bit register.
+# <= 255 are read as a byte, and must be preceeded by 00 to fill a register.
+# lines that start with a # are ignored, everything else is read.
+# This is not the Modbus ASCII format which is purely hex.
+# Modbus ASCII standard Hex format
+# lines start with a : followed by each byte encode in hex chars (no preceeding 0x) ending with a new line.
+# No CRC Checksums are added, these are calculated at the end of each line.
+
+# read 6 holding registers
+:020300000006
+:>02030C000200000064000000640000
+# read 6 input registers
+:020400000006
+:>02040C00500000FFD0000000000000
+# read slave ID, functoin 17, 0x11
+# Should respond with 0x01 0xff 0x00 0x00
+:0211
+:>02110401FF0000
+#
+# Unexptected Exception response
+# should respond with exception code 1
+:02080000000604050601
+:>028801
+# update device address to 4
+# should echo back the update
+:020600000004
+:>020600000004
+# Read holding registers from device now at4
+# should respond with registers.
+:040300000006
+:>04030C000400000064000000640000
+# update serial number to 3256
+$ 4 6 0 7 3256
+$> 4 6 0 7 3256
+# update serial number to 3010 should be denied
+# should responmd with exception code 3
+$ 4 6 0 7 3010
+:>048603
+# update voltage offset to -123
+$ 4 6 0 1 -1238
+$> 4 6 0 1 -1238
+# update voltage scale to 234
+$ 4 6 0 2 0 234
+$> 4 6 0 2 0 234
+# update current offset to 128
+$ 4 6 0 3 0 128
+$> 4 6 0 3 0 128
+# update current scale to 834
+$ 4 6 0 4 834
+$> 4 6 0 4 834
+# update temperature offset to 128
+$ 4 6 0 5 0 128
+$> 4 6 0 5 0 128
+# update temperature scale to 844
+$ 4 6 0 6 844
+$> 4 6 0 6 844
+# Read holding registers from 4
+:040300000006
+:>04030C0004FB2A00EA008003420080
+exit
