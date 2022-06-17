@@ -13,23 +13,25 @@ Modbus RTU - bigendian
 
 # Holding registers - function 3 to read, 6 to set
 
-|| Register Offset || Name || type || details ||
-| 0 | Device Adddress | int16 | 1-254 modbus address |
-| 1 | Voltage offset adjustment | int16 | ADC reading offset in bits |
-| 2 | Voltage scale adjustment | int16 | scale in 1/1000th eg 1000 = 1x |
-| 3 | Current offset adjustment | int16 | ADC reading offset in bits |
-| 4 | Current scale adjustment | int16 | scale in 1/1000th eg 1000 = 1x |
-| 5 | Temperature offset adjustment | int16 | offset in C in 1/1000th eg 1000 = +1C |
-| 6 | Temperature scale adjustment | int16 | scale in C in 1/1000th eg 1000 = 1x |
-| 7 | Serial Number | int16 | Device serial number, once set cannot be changed |
+| Offset | Name                          | type  | details                                          |
+|--------|-------------------------------|-------|--------------------------------------------------|
+| 0      | Device Adddress               | int16 | 1-254 modbus address                             |
+| 1      | Voltage offset adjustment     | int16 | ADC reading offset in bits                       |
+| 2      | Voltage scale adjustment      | int16 | scale in 1/1000th eg 1000 = 1x                   |
+| 3      | Current offset adjustment     | int16 | ADC reading offset in bits                       |
+| 4      | Current scale adjustment      | int16 | scale in 1/1000th eg 1000 = 1x                   |
+| 5      | Temperature offset adjustment | int16 | offset in C in 1/1000th eg 1000 = +1C            |
+| 6      | Temperature scale adjustment  | int16 | scale in C in 1/1000th eg 1000 = 1x              |
+| 7      | Serial Number                 | int16 | Device serial number, once set cannot be changed |
 
 
 # Input Registers - function 4 to read
 
-|| Register Offset || Name || type || details ||
-| 0 | Voltage | int16 | Units 0.01V |
-| 1 | Current | int16 | Units 0.01A |
-| 2 | Temperature | int16 | 1 = 0.01C |
+| Offset | Name        | type  | details     |
+|--------|-------------|-------|-------------|
+| 0      | Voltage     | int16 | Units 0.01V |
+| 1      | Current     | int16 | Units 0.01A |
+| 2      | Temperature | int16 | 1 = 0.01C   |
 
 # Other functions
 * 17 - report - 4 bytes, uint8 device type (0x01), uint device on (0xff), int16 serial number (0xXXXX)
