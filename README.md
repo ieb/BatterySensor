@@ -2,20 +2,23 @@
 
 Aim is to create a low power smat shunt batter sensor reporting volage, current and temperatire over ModbusRTU.
 
-Shunt is provided by a 2x MAX9918 shut amplifiers for low and high range
+Shunt is measured using a MAX9918 shut amplifier amplifying 48x a 75mV/100A shunt scaled down to 50mV to keep the MAX9918 input optimal.
 Temperature by a 10K NTC read by ADC using an interpolation table.
 Voltage by direct ADC with a voltage divder
 RS485 by MAX485
-Current read through a MAX9918 current amplifier.
 
 # Protocol
+
 Modbus RTU - bigendian
+
 
 # Holding registers - function 3 to read, 6 to set
 
+Stored in EEPROM, which is typically reset on a firmware upgrade.
+
 | Offset | Name                          | type  | details                                          |
 |--------|-------------------------------|-------|--------------------------------------------------|
-| 0      | Device Adddress               | int16 | 1-254 modbus address                             |
+| 0      | Device Adddress               | int16 | 1-254 modbus address, default is 2               |
 | 1      | Voltage offset adjustment     | int16 | ADC reading offset in bits                       |
 | 2      | Voltage scale adjustment      | int16 | scale in 1/1000th eg 1000 = 1x                   |
 | 3      | Current offset adjustment     | int16 | ADC reading offset in bits                       |
@@ -40,34 +43,35 @@ Exceptions are reported as per ModbuRTU Spec.
 
 
 # MCU
+
 Platform ATTiny8224
 Could have also used a ATTiny84, but this has no uarts and requires ICSP programming.
-Programmming using jtag2udpi on an Ardiono with avrdude.conf setup for the ATTiny8224, running at 5V.
+Programmming using jtag2udpi on an Arduino Uno with avrdude.conf setup for the ATTiny8224, running at 5V.
 
 # Voltage
 
-12V measured with a 22K/10K divider.
-Current 
-100A/75mA shunt
-Through a 100K/200K divider to take 75mV to 50mV so that the ranve of the MAX9918 is not exceeded.
-MAX9918 Gain  (1 + 47000/(1000)) = 48, FSD 0.05*(1 + 47000/(1000)) = 2.4V 
+            12V measured with a 22K/10K divider.
+            Current 
+            100A/75mA shunt
+            Through a 100K/200K divider to take 75mV to 50mV so that the ranve of the MAX9918 is not exceeded.
+            MAX9918 Gain  (1 + 47000/(1000)) = 48, FSD 0.05*(1 + 47000/(1000)) = 2.4V 
 
-Max = 2.5 + 2.4 = 4.9
-Min = 2.5 - 2.4 = 0.1
+            Max = 2.5 + 2.4 = 4.9
+            Min = 2.5 - 2.4 = 0.1
 
-The 8224 has a PGA with gains of 1,2,4,8,16 all 12bit single ended.
+            The 8224 has a PGA with gains of 1,2,4,8,16 all 12bit single ended.
 
-1x 5V resolution 0.001220703125 mV
-2x 2.5V 2.5/4096 0.0006103515625 mV
-4x 1.25 1.25/4096 0.0003051757812 mV
-8x 0.625 0.625/4096 0.0001525878906 mV
-16x 0.3125 0.3125/4096 0.00007629394531 mV
+            1x 5V resolution 0.001220703125 mV
+            2x 2.5V 2.5/4096 0.0006103515625 mV
+            4x 1.25 1.25/4096 0.0003051757812 mV
+            8x 0.625 0.625/4096 0.0001525878906 mV
+            16x 0.3125 0.3125/4096 0.00007629394531 mV
 
-The code will autoscale, so max resolution will be +-2 bits or 
-0.00007629394531*5/48 at MAX9918 input
-100/0.050*(0.00007629394531*5/48) at MAX9918 input
-15mA.
-3.1mA per bit.
+            The code will autoscale, so max resolution will be +-2 bits or 
+            0.00007629394531*5/48 at MAX9918 input
+            100/0.050*(0.00007629394531*5/48) at MAX9918 input
+            15mA.
+            3.1mA per bit.
 
 
 
@@ -76,8 +80,18 @@ The code will autoscale, so max resolution will be +-2 bits or
 Performed over serial on the second uart at 115200 baud.
 Modbus is at 9600 baud 8N1
 
-Building with DEVMODE defined allows the rs485 serial to be diverted to Serial1 and test patterns to be 
-pasted from testpatterns.txt over the monitoring serial line.
+Building with DEVMODE (see main.cpp) defined allows the rs485 serial to be diverted to Serial1 and test patterns to be pasted from testpatterns.txt over the monitoring serial line.
+
+Testing can be done with 
+
+            pio run -e native 
+
+which produces a native binary then
+
+            cat testpattern.txt |  ./.pio/build/native/program
+
+Which checks exercises the RS485 protocol using test patterns checking the response.
+
 
 
 # Programming
@@ -122,3 +136,10 @@ In outline.
             D = NTC
             E = GND
 
+
+# TODO
+
+[ ] Check MAX9918 amplifier
+[ ] Write Python Modbus RTU Controller to test for real.
+[ ] Calibrate
+[ ] Integrate with CanDiagnose controler to act as ModBus Controller for 1..n battery sensors.
