@@ -139,7 +139,7 @@ In outline.
 
 # TODO
 
-[ ] Check MAX9918 amplifier
-[ ] Write Python Modbus RTU Controller to test for real.
-[ ] Calibrate
-[ ] Integrate with CanDiagnose controler to act as ModBus Controller for 1..n battery sensors.
+* [ ] Check MAX9918 amplifier
+* [ ] Write Python Modbus RTU Controller to test for real.
+* [ ] Calibrate
+* [ ] Integrate with CanDiagnose controler to act as ModBus Controller for 1..n battery sensors.
