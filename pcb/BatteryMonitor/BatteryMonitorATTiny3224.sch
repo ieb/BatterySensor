@@ -28,6 +28,7 @@ LIBS:opto
 LIBS:atmel
 LIBS:contrib
 LIBS:valves
+LIBS:BatteryMonitorATTiny3224-cache
 EELAYER 25 0
 EELAYER END
 $Descr A4 11693 8268
@@ -180,12 +181,12 @@ RS485-B
 $Comp
 L C C106
 U 1 1 6293FF59
-P 2900 1050
-F 0 "C106" H 2900 1150 40  0000 L CNN
-F 1 "100nF" H 2906 965 40  0000 L CNN
-F 2 "Capacitors_SMD:C_0805" H 2938 900 30  0001 C CNN
-F 3 "" H 2900 1050 60  0000 C CNN
-	1    2900 1050
+P 7700 2850
+F 0 "C106" H 7700 2950 40  0000 L CNN
+F 1 "100nF" H 7706 2765 40  0000 L CNN
+F 2 "Capacitors_SMD:C_0805" H 7738 2700 30  0001 C CNN
+F 3 "" H 7700 2850 60  0000 C CNN
+	1    7700 2850
 	1    0    0    -1  
 $EndComp
 Text GLabel 4650 4750 0    60   Input ~ 0
@@ -379,12 +380,12 @@ $EndComp
 $Comp
 L GND #PWR011
 U 1 1 629BB5D8
-P 2900 1350
-F 0 "#PWR011" H 2900 1350 30  0001 C CNN
-F 1 "GND" H 2900 1280 30  0001 C CNN
-F 2 "" H 2900 1350 60  0001 C CNN
-F 3 "" H 2900 1350 60  0001 C CNN
-	1    2900 1350
+P 7600 2600
+F 0 "#PWR011" H 7600 2600 30  0001 C CNN
+F 1 "GND" H 7600 2530 30  0001 C CNN
+F 2 "" H 7600 2600 60  0001 C CNN
+F 3 "" H 7600 2600 60  0001 C CNN
+	1    7600 2600
 	1    0    0    -1  
 $EndComp
 Text GLabel 1500 4500 2    60   BiDi ~ 0
@@ -405,27 +406,14 @@ $EndComp
 $Comp
 L C C107
 U 1 1 629CD333
-P 3150 1050
-F 0 "C107" H 3150 1150 40  0000 L CNN
-F 1 "1nF" H 3156 965 40  0000 L CNN
-F 2 "Capacitors_SMD:C_0805" H 3188 900 30  0001 C CNN
-F 3 "" H 3150 1050 60  0000 C CNN
-	1    3150 1050
+P 7450 2850
+F 0 "C107" H 7450 2950 40  0000 L CNN
+F 1 "1nF" H 7456 2765 40  0000 L CNN
+F 2 "Capacitors_SMD:C_0805" H 7488 2700 30  0001 C CNN
+F 3 "" H 7450 2850 60  0000 C CNN
+	1    7450 2850
 	1    0    0    -1  
 $EndComp
-$Comp
-L GND #PWR013
-U 1 1 629CD46D
-P 3150 1350
-F 0 "#PWR013" H 3150 1350 30  0001 C CNN
-F 1 "GND" H 3150 1280 30  0001 C CNN
-F 2 "" H 3150 1350 60  0001 C CNN
-F 3 "" H 3150 1350 60  0001 C CNN
-	1    3150 1350
-	1    0    0    -1  
-$EndComp
-Text Notes 2950 1550 0    60   ~ 0
-CPU
 Text Notes 1650 1550 0    60   ~ 0
 Other Chips as required
 $Comp
@@ -468,7 +456,7 @@ Text GLabel 9950 3500 2    60   Input ~ 0
 RXDebug
 Text GLabel 9950 3650 2    60   Output ~ 0
 TXDebug
-Text GLabel 10000 3800 2    60   BiDi ~ 0
+Text GLabel 10550 3800 2    60   BiDi ~ 0
 UDPI
 Text GLabel 10600 4700 2    60   BiDi ~ 0
 SDA
@@ -506,9 +494,13 @@ NoConn ~ 9950 4100
 NoConn ~ 9950 3950
 NoConn ~ 9950 3350
 Wire Wire Line
-	5000 3250 6050 3250
+	5000 3250 5750 3250
 Wire Wire Line
-	6050 3200 6050 3350
+	5750 3250 6050 3250
+Wire Wire Line
+	6050 3200 6050 3250
+Wire Wire Line
+	6050 3250 6050 3350
 Connection ~ 6050 3250
 Wire Wire Line
 	6050 3850 6050 4000
@@ -517,7 +509,9 @@ Wire Wire Line
 Wire Wire Line
 	6050 2650 6050 2700
 Wire Wire Line
-	4000 3450 4000 3650
+	4000 3450 4000 3550
+Wire Wire Line
+	4000 3550 4000 3650
 Wire Wire Line
 	4000 3450 4100 3450
 Wire Wire Line
@@ -536,16 +530,22 @@ Wire Wire Line
 Wire Wire Line
 	4850 4700 4750 4700
 Wire Wire Line
-	4750 4700 4750 4800
+	4750 4700 4750 4750
+Wire Wire Line
+	4750 4750 4750 4800
 Wire Wire Line
 	4750 4800 4850 4800
 Wire Wire Line
 	4650 4750 4750 4750
 Connection ~ 4750 4750
 Wire Wire Line
-	3950 6250 3950 6400
+	3950 6250 3950 6300
 Wire Wire Line
-	3700 6300 4100 6300
+	3950 6300 3950 6400
+Wire Wire Line
+	3700 6300 3950 6300
+Wire Wire Line
+	3950 6300 4100 6300
 Connection ~ 3950 6300
 Wire Wire Line
 	3700 6300 3700 6450
@@ -554,7 +554,9 @@ Wire Wire Line
 Wire Wire Line
 	3700 7100 3950 7100
 Wire Wire Line
-	3950 6900 3950 7250
+	3950 6900 3950 7100
+Wire Wire Line
+	3950 7100 3950 7250
 Wire Wire Line
 	3750 5650 3950 5650
 Wire Wire Line
@@ -583,9 +585,17 @@ Wire Wire Line
 Wire Wire Line
 	1500 1000 1500 1100
 Wire Wire Line
-	750  700  1100 700 
+	750  700  950  700 
 Wire Wire Line
-	1900 700  3350 700 
+	950  700  1100 700 
+Wire Wire Line
+	1900 700  2000 700 
+Wire Wire Line
+	2000 700  2350 700 
+Wire Wire Line
+	2350 700  2650 700 
+Wire Wire Line
+	2650 700  3350 700 
 Wire Wire Line
 	950  800  950  700 
 Connection ~ 950  700 
@@ -601,26 +611,18 @@ Wire Wire Line
 	2350 850  2350 700 
 Connection ~ 2350 700 
 Wire Wire Line
-	2650 850  2650 700 
+	2650 700  2650 850 
 Connection ~ 2650 700 
-Wire Wire Line
-	2900 850  2900 700 
-Connection ~ 2900 700 
 Wire Wire Line
 	2350 1250 2350 1400
 Wire Wire Line
 	2650 1250 2650 1350
 Wire Wire Line
-	2900 1250 2900 1350
-Wire Wire Line
-	3150 700  3150 850 
-Wire Wire Line
-	3150 1250 3150 1350
-Connection ~ 3150 700 
-Wire Wire Line
 	2900 2300 2900 2400
 Wire Wire Line
-	5050 3550 5050 4100
+	5050 3550 5050 3800
+Wire Wire Line
+	5050 3800 5050 4100
 Wire Wire Line
 	5050 3800 4850 3800
 Wire Wire Line
@@ -632,7 +634,9 @@ Wire Wire Line
 Wire Wire Line
 	10200 3200 9850 3200
 Wire Wire Line
-	7750 3200 7550 3200
+	7550 3200 7700 3200
+Wire Wire Line
+	7700 3200 7750 3200
 Wire Wire Line
 	7750 3350 7550 3350
 Wire Wire Line
@@ -742,20 +746,28 @@ Wire Wire Line
 Wire Wire Line
 	3250 5000 3250 4900
 Wire Wire Line
-	3250 4300 3250 4400
+	3250 4300 3250 4350
+Wire Wire Line
+	3250 4350 3250 4400
 Wire Wire Line
 	3250 3200 3250 3100
 Wire Wire Line
-	2750 3100 3800 3100
+	2750 3100 3250 3100
+Wire Wire Line
+	3250 3100 3500 3100
+Wire Wire Line
+	3500 3100 3800 3100
 Wire Wire Line
 	3800 3100 3800 3150
 Connection ~ 3250 3100
 Wire Wire Line
-	3800 3250 3800 4350
+	3800 4350 3800 3250
 Wire Wire Line
 	3250 3700 3250 3800
 Wire Wire Line
-	3800 4350 3250 4350
+	3250 4350 3500 4350
+Wire Wire Line
+	3500 4350 3800 4350
 Connection ~ 3250 4350
 Text Notes 3300 3800 0    60   ~ 0
 50mV FSD
@@ -771,7 +783,9 @@ Wire Wire Line
 Wire Wire Line
 	5300 3550 5300 3450
 Wire Wire Line
-	5000 3450 5550 3450
+	5000 3450 5300 3450
+Wire Wire Line
+	5300 3450 5550 3450
 $Comp
 L R R111
 U 1 1 629E264E
@@ -812,4 +826,38 @@ Connection ~ 3500 4350
 Wire Wire Line
 	3500 3500 3500 3100
 Connection ~ 3500 3100
+$Comp
+L R R?
+U 1 1 62AC3208
+P 10250 3800
+F 0 "R?" V 10330 3800 40  0000 C CNN
+F 1 "270R" V 10257 3801 40  0000 C CNN
+F 2 "Resistors_SMD:R_0805" V 10180 3800 30  0001 C CNN
+F 3 "" H 10250 3800 30  0000 C CNN
+	1    10250 3800
+	0    -1   -1   0   
+$EndComp
+Wire Wire Line
+	10500 3800 10550 3800
+Wire Wire Line
+	7700 3050 7700 3100
+Wire Wire Line
+	7700 3100 7700 3200
+Connection ~ 7700 3200
+Wire Wire Line
+	7700 2450 7700 2650
+Wire Wire Line
+	7450 2450 7600 2450
+Wire Wire Line
+	7600 2450 7700 2450
+Wire Wire Line
+	7700 3100 7450 3100
+Wire Wire Line
+	7450 3100 7450 3050
+Connection ~ 7700 3100
+Wire Wire Line
+	7450 2650 7450 2450
+Wire Wire Line
+	7600 2450 7600 2600
+Connection ~ 7600 2450
 $EndSCHEMATC

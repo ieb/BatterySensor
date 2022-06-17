@@ -8,6 +8,17 @@
 
 #include "stackcheck.h"
 
+#include "devmoders485.h"
+
+#define DEVMODE 1
+#ifdef DEVMODE
+DevRS485Class * rs485 = &DevRS485;
+UartClass * debug = &Serial1;
+#else
+UartClass * rs485 = &Serial;
+UartClass * debug = &Serial1;
+#endif
+
 /*
 RAM:   [===       ]  29.5% (used 151 bytes from 512 bytes)
 Flash: [===       ]  27.2% (used 2226 bytes from 8192 bytes)
@@ -40,8 +51,6 @@ Flash: [====      ]  44.5% (used 3646 bytes from 8192 bytes)
 #define ADC_CURRENT A7 // ADC 7 is PA7 on pin 5
 #define ADC_NTC A5 // ADC 5 is PA5 on pin 3
 
-#define SERIAL_RX 5  // pin 5
-#define SERIAL_TX 6 // pin 6
 
 
 #define DEVICE_TYPE 0x01
@@ -146,7 +155,7 @@ void loadDefaults() {
   uint16_t crcv =  crc16(&eepromContents[0], HR_SIZE-2);
   uint16_t crcvs = (0xff00&eepromContents[HR_CRC]) | (0xff00&(eepromContents[HR_CRC+1]<<8)); // little endian
   if (crcv != crcvs ||eepromContents[HR_DEVICE_ADDRESS] == 0 ) {
-    Serial1.printf(F("EPROM not initialised\n"));
+    debug->printf(F("EPROM not initialised\n"));
     for(uint8_t i = 0; i < HR_SIZE-2; i++) {
       eepromContents[i] = pgm_read_byte_near(epromDefaultValues+i);
     }
@@ -155,19 +164,26 @@ void loadDefaults() {
     eepromContents[HR_CRC+1] = 0xff&(crcv>>8); // little endian
     eeprom_update_block(&eepromContents[0], (void*)0, HR_SIZE);
   } else {
-    Serial1.printf(F("EPROM initialised %d = %d  device %d\n"),crcv, crcvs, eepromContents[HR_DEVICE_ADDRESS]);
+    debug->printf(F("EPROM initialised %d = %d  device %d\n"),crcv, crcvs, eepromContents[HR_DEVICE_ADDRESS]);
   }
   deviceAddress = eepromContents[HR_DEVICE_ADDRESS];
 }
 
+/* definition to expand macro then apply to pragma message */
+#define VALUE_TO_STRING(x) #x
+#define VALUE(x) VALUE_TO_STRING(x)
+#define VAR_NAME_VALUE(var) #var "="  VALUE(var)
+
+//#pragma message(VAR_NAME_VALUE(PIN_HWSERIAL0_TX))
 
 
 void setup() {
-  SERIAL_RS485; // enable RS485 flow control on PA4/XDIR/Pin 2 
-  Serial.begin(9600, SERIAL_8N1);
-  Serial1.begin((uint32_t)115200, SERIAL_8N1);
 
-  Serial1.printf(F("Starting Battery Monitor"));
+  SERIAL_RS485; // enable RS485 flow control on PA4/XDIR/Pin 2 
+  rs485->begin(9600, SERIAL_8N1);
+  debug->begin((uint32_t)115200, SERIAL_8N1);
+
+  debug->printf(F("Starting Battery Monitor"));
   frameBuffer[RESPONSE_FRAME_LEN-1] = 0xee;
 
 
@@ -186,12 +202,12 @@ int8_t readQuery() {
   static unsigned long startFrameTimeout = micros();
   static bool readingFrame = true;
   static uint8_t readFramePos = 0;
-  if ( Serial.available() > 0) {
+  if ( rs485->available() > 0) {
     // was there silence ?
     unsigned long now = micros();
     if ( now > startFrameTimeout ) {
       if ( readFramePos > 0) {
-        Serial1.printf(F("New Frame\n"));
+        debug->printf(F("New Frame\n"));
       }
       // new frame
       readFramePos = 0;
@@ -200,10 +216,10 @@ int8_t readQuery() {
     }
     // restart startFrameTimeout
     startFrameTimeout = now + FRAME_START_SILENCE;
-    size_t n = Serial.readBytes(&frameBuffer[readFramePos], QUERY_FRAME_LEN-readFramePos);
+    size_t n = rs485->readBytes(&frameBuffer[readFramePos], QUERY_FRAME_LEN-readFramePos);
     if (readingFrame) {
         readFramePos += n;
-        Serial1.printf(F("Frame now %d\n"), readFramePos);
+        debug->printf(F("Frame now %d\n"), readFramePos);
         uint8_t frameLength = QUERY_FRAME_LEN;
         if (readFramePos > FRAME_OFFSET_FUNCTION_CODE) {
           switch(frameBuffer[FRAME_OFFSET_FUNCTION_CODE]) {
@@ -216,7 +232,7 @@ int8_t readQuery() {
               frameLength = 4; 
               break;
           }
-          Serial1.printf(F("Frame now %d, function %d, expecting %d\n"), readFramePos, frameBuffer[FRAME_OFFSET_FUNCTION_CODE], frameLength );
+          debug->printf(F("Frame now %d, function %d, expecting %d\n"), readFramePos, frameBuffer[FRAME_OFFSET_FUNCTION_CODE], frameLength );
         }
 
         if (readFramePos >= frameLength) {
@@ -227,10 +243,10 @@ int8_t readQuery() {
              if (crcValue == crcFrameValue ) {
                 return frameBuffer[FRAME_OFFSET_FUNCTION_CODE]; 
              } else {
-               Serial1.printf(F("CRC from 0 for %d is %X %X "), FRAME_OFFSET_QUERY_CHECKSUM, crcValue, crcFrameValue);
+               debug->printf(F("CRC from 0 for %d is %X %X "), FRAME_OFFSET_QUERY_CHECKSUM, crcValue, crcFrameValue);
              }           
           } else {
-            Serial1.printf(F(" Frame Address %d Device address %d\n"), frameBuffer[FRAME_OFFSET_DEVICE_ADDRESS], deviceAddress );
+            debug->printf(F(" Frame Address %d Device address %d\n"), frameBuffer[FRAME_OFFSET_DEVICE_ADDRESS], deviceAddress );
           }
           readFramePos = 0;
           // any more bytes are noise until we see > 3.5 chars of silence.
@@ -271,7 +287,7 @@ int16_t readVoltage() {
   // (5/4096)*(32/10) V/bit
 #define MV10_PER_ADC_BIT 0.390625 // (5/4096)*(32/10) == 0.00390625 V/bit or 3.90625 mV/bitm or 0.390625 (10mV)/bit
   float v = voltage;
-  v *= MV10_PER_ADC_BIT*0.001*voltageScale;
+  v *= MV10_PER_ADC_BIT*0.001*(voltageScale*0.001);
   return (int16_t) (v);  
 }
 /**
@@ -310,7 +326,7 @@ int16_t readCurrent() {
   // current in  10mA units is 100*((100/0.050)*(voltage*0.00007629394531)/48))
 #define MA10_PER_ADC_BIT 0.3178914388  
   float v = voltage;
-  v *= MA10_PER_ADC_BIT*0.001*currentScale;
+  v *= MA10_PER_ADC_BIT*0.001*(currentScale*0.001);
   return (int16_t)(v);
 }
 
@@ -514,23 +530,23 @@ void loop() {
      // noop
       break;
     case 3: // read holding
-      Serial1.printf(F("read holding\n"));
+      debug->printf(F("read holding\n"));
       toSend = readHolding();
       break;
     case 4: // read input
-      Serial1.printf(F("read input\n"));
+      debug->printf(F("read input\n"));
       toSend = readInput();
       break;
     case 6: // write single holding
-      Serial1.printf(F("write holding\n"));
+      debug->printf(F("write holding\n"));
       toSend = writeHolding();
       break;
     case 17: // report slave ID
-      Serial1.printf(F("report slave\n"));
+      debug->printf(F("report slave\n"));
       toSend = writeSlaveId();
       break;
     default:
-      Serial1.printf(F("unexpected function\n"));
+      debug->printf(F("unexpected function\n"));
       toSend = sendFunctionCodeError(EXCEPTION_ILEGAL_FUNCTION);
       // respond with error
   }
@@ -538,11 +554,15 @@ void loop() {
     uint16_t crc = crc16(&frameBuffer[0], toSend);
     frameBuffer[toSend++] = (crc>>8)&0xff;
     frameBuffer[toSend++] = (crc&0xff);
-    Serial.write(frameBuffer, toSend);
-    Serial.flush();
+    rs485->write(frameBuffer, toSend);
+    rs485->flush();
   } 
 
+  /*
   uint16_t sc = StackCount();
-  Serial1.printf(F("Stack Used %d \n"), sc);
+  if ( sc > 100 ) {
+    debug->printf(F("Stack Used %d \n"), sc);
+  }
+  */
 
 }

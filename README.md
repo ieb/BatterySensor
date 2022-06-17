@@ -72,3 +72,49 @@ The code will autoscale, so max resolution will be +-2 bits or
 Performed over serial on the second uart at 115200 baud.
 Modbus is at 9600 baud 8N1
 
+Building with DEVMODE defined allows the rs485 serial to be diverted to Serial1 and test patterns to be 
+pasted from testpatterns.txt over the monitoring serial line.
+
+
+# Programming
+
+Currently using jtag2udpi, via an Uno, but setting fuses seems hard
+Needs a modified avrdude.conf file to add support for the attiny3224
+pio run -t fuse -e attiny3224 does appear to work.
+Have not tried changing the values of the fuses.
+Looking at megaTinyCore support in the Arduino IDE using SerialUDPI is much better and more advanced.
+
+    pio run -t upload -e attiny322 
+
+works ok for the moment.
+
+# Board
+
+For full details see the pcb/*
+In outline.
+
+            ------------------------------------------
+            | a           1 2 3 4 5                 A|
+            | b   MAX                      MAX      B|     
+            | c   RS485   Atting3224       9918     C|     
+            | d                                     D|     
+            |     AMS1117                           E|
+            ------------------------------------------     
+
+a = RS485 A
+b = RS485 B
+c = GND
+d = Vin (12v)
+
+1 = GND
+2 = +5V
+3 = Debug RX
+4 = Debug TX
+5 = UDPI
+
+A = Shunt -
+B = Shunt +
+C = Battery +Ve
+D = NTC
+E = GND
+
