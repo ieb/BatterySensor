@@ -12,6 +12,7 @@ Current read through a MAX9918 current amplifier.
 Modbus RTU - bigendian
 
 # Holding registers - function 3 to read, 6 to set
+
 || Register Offset || Name || type || details ||
 | 0 | Device Adddress | int16 | 1-254 modbus address |
 | 1 | Voltage offset adjustment | int16 | ADC reading offset in bits |
@@ -24,6 +25,7 @@ Modbus RTU - bigendian
 
 
 # Input Registers - function 4 to read
+
 || Register Offset || Name || type || details ||
 | 0 | Voltage | int16 | Units 0.01V |
 | 1 | Current | int16 | Units 0.01A |
@@ -101,20 +103,20 @@ In outline.
             |     AMS1117                           E|
             ------------------------------------------     
 
-a = RS485 A
-b = RS485 B
-c = GND
-d = Vin (12v)
+            a = RS485 A
+            b = RS485 B
+            c = GND
+            d = Vin (12v)
 
-1 = GND
-2 = +5V
-3 = Debug RX
-4 = Debug TX
-5 = UDPI
+            1 = GND
+            2 = +5V
+            3 = Debug RX
+            4 = Debug TX
+            5 = UDPI
 
-A = Shunt -
-B = Shunt +
-C = Battery +Ve
-D = NTC
-E = GND
+            A = Shunt -
+            B = Shunt +
+            C = Battery +Ve
+            D = NTC
+            E = GND
 
