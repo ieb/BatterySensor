@@ -25,6 +25,20 @@ typedef unsigned char byte;
 #define F(x) x
 #define SERIAL_RS485
 #define SERIAL_8N1 0
+#define INTERNAL4V096 1
+#define INTERNAL2V048 2
+#define INTERNAL1V024 3
+
+#define PIN_A5  5
+#define PIN_A6  6
+#define PIN_A7  7
+#define PIN_PA3 3
+#define PIN_PA4 4
+#define PIN_PA5 5
+#define PIN_PA6 6
+#define PIN_PA7 7
+#define HEX 16
+
 
 // CRC POLYNOME = x15 + 1 =  1000 0000 0000 0001 = 0x8001
 uint16_t crc16(const uint8_t *array, uint16_t length, const uint16_t polynome,
@@ -59,6 +73,10 @@ void pinMode(int pin, int mode) {
 void delay(int millis) {
     usleep(millis*1000);
 }
+void delayMicroseconds(int us) {
+    usleep(us);
+}
+
 
 unsigned long micros(){
     static unsigned long start = 0;
@@ -76,10 +94,19 @@ int16_t analogRead(uint8_t pin) {
     return 2045;
 }
 
-int32_t analogReadEnh(uint8_t pin, uint8_t bits,  uint8_t gain) {
+int32_t analogReadEnh(uint8_t pin, uint8_t bits=12,  uint8_t gain=0) {
     int16_t max = 1<<bits;
     return max/2;
 } 
+int32_t analogReadDiff(uint8_t pinA, uint8_t pinB, uint8_t bits=12,  uint8_t gain=0) {
+    return 100;
+} 
+void analogReference(int ref) {
+
+}
+void analogSampleDuration(int delay) {
+
+}
 int16_t pgm_read_dword(const int16_t *intp) {
     return *intp;
 }
@@ -89,6 +116,9 @@ uint8_t  pgm_read_byte_near(const uint8_t *ptr) {
 }
 
 #define DEBUG(x) std::cout << "Debug:" << x << std::endl
+
+
+
 
 class SerialClass {
     public:
@@ -212,6 +242,30 @@ class SerialClass {
             vprintf(fmt,args);
             va_end(args);
         };
+        void print(const char * v) {
+            printf("%s",v);
+        };
+        void print(int16_t  v) {
+            printf("%d",v);
+        };
+        void print(int32_t  v) {
+            printf("%ld",v);
+        };
+        void print(float  v) {
+            printf("%f",v);
+        };
+        void println(float  v) {
+            printf("%f\n",v);
+        };
+        void println(const char * v) {
+            printf("%s\n",v);
+        };
+        void print(uint8_t b, uint8_t base) {
+            if ( base == HEX ) {
+                printf("%X",b);
+            }
+            printf("%d",b);
+        };
     private:
         uint32_t baud;
         uint16_t options;
@@ -222,7 +276,15 @@ class SerialClass {
 
 SerialClass Serial = SerialClass();
 SerialClass Serial1 = SerialClass();
+#define UartClass SerialClass
 
+class CommandLine {
+    public:
+        CommandLine(SerialClass * io): io{io} {};
+        void checkCommand() {};
+    private:
+        SerialClass *io; 
+};
 
 
 byte eeprom[512];

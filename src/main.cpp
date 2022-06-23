@@ -1,24 +1,35 @@
 #ifdef NATIVE
 #include "nativemocks.h"
+#include "holdingregisters.h"
+
+SerialClass * rs485 = &Serial;
+SerialClass * debug = &Serial1;
+
+
 #else
 #include <Arduino.h>
 #include <avr/eeprom.h>
+
+
+
+// #define DEVMODE 1
+#ifdef DEVMODE
+#include "devmoders485.h"
+DevRS485Class * rs485 = &DevRS485;
+UartClass * debug = &Serial;
+#else
+UartClass * rs485 = &Serial1;
+UartClass * debug = &Serial;
+#endif
+
+#include "holdingregisters.h"
+#include "commandline.h"
 
 #endif
 
 #include "stackcheck.h"
 
-#include "devmoders485.h"
-
-#define DEVMODE 1
-#ifdef DEVMODE
-DevRS485Class * rs485 = &DevRS485;
-UartClass * debug = &Serial1;
-#else
-UartClass * rs485 = &Serial;
-UartClass * debug = &Serial1;
-#endif
-
+CommandLine commandLine = CommandLine(debug);
 /*
 RAM:   [===       ]  29.5% (used 151 bytes from 512 bytes)
 Flash: [===       ]  27.2% (used 2226 bytes from 8192 bytes)
@@ -42,14 +53,14 @@ Refactored register output to be more efficient.
 RAM:   [===       ]  31.2% (used 160 bytes from 512 bytes)
 Flash: [====      ]  44.5% (used 3646 bytes from 8192 bytes)
 
+// Moved to Attiny3224 which has more FLASH and RAM and far better ADC's
 
+Advanced Memory Usage is available via "PlatformIO Home > Project Inspect"
+RAM:   [=         ]  11.7% (used 360 bytes from 3072 bytes)
+Flash: [====      ]  43.5% (used 14245 bytes from 32768 bytes)
+Building .pio/build/attiny3224/firmware.hex
 
 */
-
-
-#define ADC_VOLTAGE A6 // ADC 6 is PA6 on pin 4
-#define ADC_CURRENT A7 // ADC 7 is PA7 on pin 5
-#define ADC_NTC A5 // ADC 5 is PA5 on pin 3
 
 
 
@@ -65,31 +76,6 @@ Flash: [====      ]  44.5% (used 3646 bytes from 8192 bytes)
 #define MAX_HOLDING_REGISTER 8
 byte frameBuffer[RESPONSE_FRAME_LEN];
 
-
-// holding registers locations in eeprom
-#define HR_SIZE 18 // size in bytes of the HR store
-// offsets
-#define HR_DEVICE_ADDRESS 0
-#define HR_VOLTAGE_OFFSET 2
-#define HR_VOLTAGE_SCALE 4
-#define HR_CURRENT_OFFSET 6
-#define HR_CURRENT_SCALE 8
-#define HR_TEMPERATURE_OFFSET 10
-#define HR_TEMPERATURE_SCALE 12
-#define HR_SERIAL_NUMBER 14
-#define HR_CRC 16
-
-// little endian
-const uint8_t epromDefaultValues[HR_CRC] PROGMEM = {
-  0x02, 0x00,  // device address 2
-  0x00, 0x00,  // voltage offset 0
-  0x64, 0x00,  // voltage scale 100
-  0x00, 0x00,  // current offset 0
-  0x64, 0x00,  // current scale 100
-  0x00, 0x00,  // temperature offset 0
-  0x64, 0x00,  // temperature scale 100
-  0x00, 0x00  // serial number
-};
 
 
 
@@ -119,6 +105,14 @@ const uint8_t epromDefaultValues[HR_CRC] PROGMEM = {
 
 
 uint8_t deviceAddress = 0x00;
+
+// counters
+uint16_t  framesRecieved=0;
+uint16_t  framesSent=0;
+uint16_t  framesErrorRecieved=0;
+uint16_t  framesIgnored=0;
+uint16_t  framesErrorSent=0;
+
 
 // CRC POLYNOME = x15 + 1 =  1000 0000 0000 0001 = 0x8001
 #define CRC16_IBM                   0x8005
@@ -181,7 +175,11 @@ void setup() {
 
   SERIAL_RS485; // enable RS485 flow control on PA4/XDIR/Pin 2 
   rs485->begin(9600, SERIAL_8N1);
-  debug->begin((uint32_t)115200, SERIAL_8N1);
+  debug->begin(9600, SERIAL_8N1);
+  pinMode(PIN_PA3, INPUT); // NTC
+  pinMode(PIN_PA5, INPUT); //Sense -
+  pinMode(PIN_PA6, INPUT); // Sense +
+  pinMode(PIN_PA7, INPUT); // Bat
 
   debug->printf(F("Starting Battery Monitor"));
   frameBuffer[RESPONSE_FRAME_LEN-1] = 0xee;
@@ -241,11 +239,14 @@ int8_t readQuery() {
             uint16_t crcValue = crc16(&frameBuffer[0], frameLength-2);
             uint16_t crcFrameValue = getUInt16(frameLength-2);
              if (crcValue == crcFrameValue ) {
+                framesRecieved++;
                 return frameBuffer[FRAME_OFFSET_FUNCTION_CODE]; 
              } else {
-               debug->printf(F("CRC from 0 for %d is %X %X "), FRAME_OFFSET_QUERY_CHECKSUM, crcValue, crcFrameValue);
+                framesErrorRecieved++;
+                debug->printf(F("CRC from 0 for %d is %X %X "), FRAME_OFFSET_QUERY_CHECKSUM, crcValue, crcFrameValue);
              }           
           } else {
+            framesIgnored++;
             debug->printf(F(" Frame Address %d Device address %d\n"), frameBuffer[FRAME_OFFSET_DEVICE_ADDRESS], deviceAddress );
           }
           readFramePos = 0;
@@ -265,6 +266,7 @@ int8_t readQuery() {
  * @param exceptionCode 
  */
 int8_t sendFunctionCodeError(uint8_t exceptionCode) {
+  framesErrorSent++;
   frameBuffer[FRAME_OFFSET_FUNCTION_CODE] |= 0x80;
   frameBuffer[FRAME_EXCEPTION_CODE] = exceptionCode;
   return FRAME_EXCEPTION_CODE+1;
@@ -279,17 +281,52 @@ int16_t readVoltage() {
   dw = eeprom_read_word((const uint16_t *)HR_VOLTAGE_OFFSET);
   int16_t voltageOffset = (int16_t)(0xffff&dw);
 
-  int32_t voltage = analogReadEnh(ADC_VOLTAGE, 12, 1);
-  // 5/4096
-  // 
-  voltage += voltageOffset; // offset before scaling in bits
-  // R1 = 22K R2 = 10K, hence 
-  // (5/4096)*(32/10) V/bit
-#define MV10_PER_ADC_BIT 0.390625 // (5/4096)*(32/10) == 0.00390625 V/bit or 3.90625 mV/bitm or 0.390625 (10mV)/bit
-  float v = voltage;
-  v *= MV10_PER_ADC_BIT*0.001*(voltageScale*0.001);
-  return (int16_t) (v);  
+  // Divider == 10/42  (R1 = 32, R2 = 10)
+  // 16 bit 4.096, mV/bit == 4.096/2^16 == 0.0625 mVadc/bit
+  // (4.096/2^16)*42/10 = 0.2625 mVin/bit
+
+  // calibration
+  // v
+#define MV_PER_16BIT_ADC 0.0625
+#define MV_PER_16BIT_VIN 0.2625
+  analogReference(INTERNAL4V096); 
+  delayMicroseconds(100); // wait at least 60us for the reference change to act
+  analogSampleDuration(300);
+  int32_t reading = analogReadEnh(PIN_PA7, 16); // discard
+  analogSampleDuration(300);
+  reading = analogReadEnh(PIN_PA7, 16);
+  float mvAdc = reading*MV_PER_16BIT_ADC;
+  float mvVin = reading*MV_PER_16BIT_VIN*(0.0001*voltageScale)+(0.1*voltageOffset);
+
+  debug->print("Read Voltage offset=");
+  debug->print(voltageOffset);
+  debug->print(" scale=");
+  debug->print(voltageScale);
+  debug->print(" adc=");
+  debug->print(reading);
+  debug->print(" mVadc=");
+  debug->print(mvAdc);
+  debug->print(" mVin=");
+  debug->println(mvVin);
+
+  return (int16_t) (mvVin/10);  
 }
+
+
+float readSample(float scalar, uint8_t times, uint8_t gain) {
+  debug->print(analogReadDiff(PIN_PA6,PIN_PA5, 16, gain)); // discard
+  int32_t s = analogReadDiff(PIN_PA6,PIN_PA5, 16, gain);
+  float mul = scalar/times;
+  float acc = s*mul;
+  for (uint8_t i = 1; i < times; i++) {
+    delayMicroseconds(100);
+    int32_t s = analogReadDiff(PIN_PA6,PIN_PA5, 16, gain);
+    acc += s*mul;
+  }
+  return acc;
+}
+
+
 /**
  * @brief read current as an int 1 == 10mA
  * 
@@ -301,33 +338,71 @@ int16_t readCurrent() {
   dw = eeprom_read_word((const uint16_t *)HR_CURRENT_OFFSET);
   int16_t currentOffset = (int16_t)(0xffff&dw);
 
-  int gain = 1;
-  // autoscale the gain of the ADC.
-  int32_t voltage = analogReadEnh(ADC_VOLTAGE, 12, gain);
-  while(voltage < 1000 && gain < 16) {
-    gain = gain * 2;
-    voltage = analogReadEnh(ADC_VOLTAGE, 12, gain);
-  }
 
-  // 1x 5V resolution 0.001220703125
-  // 2x 2.5V 2.5/4096 0.0006103515625
-  // 4x 1.25 1.25/4096 0.0003051757812
-  // 8x 0.625 0.625/4096 0.0001525878906
-  // 16x 0.3125 0.3125/4096 0.00007629394531
-  // convert the reading into a reading a 16x gain
-  voltage = voltage*(16/gain);
-  voltage -= 8*4096;  // theoretical midpoint
-  voltage += currentOffset;  // shift midpoint in 0.00007629394531 steps integer reading representing the output of the MAX8818 
-  // multiply this by 0.00007629394531 to get the voltage
-  // Gain of MAX9918 is 1+47000/1000 = 48
-  // voltage at MAX9918 output is voltage*0.00007629394531
-  // voltage at MAX9918 input is (voltage*0.00007629394531)/48
-  // current at shunt (100/0.050)*(voltage*0.00007629394531)/48
-  // current in  10mA units is 100*((100/0.050)*(voltage*0.00007629394531)/48))
-#define MA10_PER_ADC_BIT 0.3178914388  
-  float v = voltage;
-  v *= MA10_PER_ADC_BIT*0.001*(currentScale*0.001);
-  return (int16_t)(v);
+
+
+#define SHUNT75_INTERNAL4V096_MA_16BIT_LSB 3.546099291
+#define SHUNT75_INTERNAL2V048_MA_16BIT_LSB 1.773049645
+#define SHUNT75_INTERNAL1V024_MA_16BIT_LSB 0.8865248227
+
+#define INTERNAL4V096_MV_16BIT_LSB  0.125 // 4096/2^15  
+#define INTERNAL2V048_MV_16BIT_LSB  0.0625 // 2048/2^15
+#define INTERNAL1V024_MV_16BIT_LSB  0.03125 // 1024/2^15
+#define INTERNAL1V024X2_MV_16BIT_LSB 0.015625
+#define INTERNAL1V024X4_MV_16BIT_LSB 0.0078125
+#define INTERNAL1V024X8_MV_16BIT_LSB 0.00390625
+#define INTERNAL1V024X16_MV_16BIT_LSB 0.001953125
+#define MAFACTOR 1333.3333333 //100000/75 in mA
+
+  // set sample time to get a quick estimate of which range to use.
+  analogSampleDuration(30);
+  analogReference(INTERNAL4V096);  
+  delayMicroseconds(100); // wait at least 60us for the reference change to act
+  // determine the range 2048/2^^15  0.0625 mV per bit
+  // 200mV is over range
+  // 
+  uint8_t gain = 0;
+  float scale = INTERNAL4V096_MV_16BIT_LSB;
+  int32_t sample = analogReadDiff(PIN_PA6,PIN_PA5, 16,0); // dispose
+  sample = analogReadDiff(PIN_PA6,PIN_PA5, 16,0);
+  if ( sample < 1000 && sample > -1000 ) {
+    // less than +- 62.5mV 1024 16x range
+    gain = 16;
+    scale = INTERNAL1V024X16_MV_16BIT_LSB;
+    analogReference(INTERNAL1V024);
+    debug->print(" 16x  ");  
+  } else if ( sample < 2000 && sample > -2000 ) {
+    // less than +- 125mV 1024 8x range 
+    gain = 8;
+    scale = INTERNAL1V024X8_MV_16BIT_LSB;
+    analogReference(INTERNAL1V024);  
+    debug->print(" 8x  ");  
+  } else if ( sample < 4000 && sample > -4000 ) {
+    // less than  +-250mV 1024 4x range 
+    gain = 4;
+    scale = INTERNAL1V024X4_MV_16BIT_LSB;
+    analogReference(INTERNAL1V024);  
+    debug->print(" 4x  ");  
+  } else if ( sample < 16000 && sample > -16000 ){
+    // greater than 250mV and less than 1v can be read on the 4096 range at 16bit
+    scale = INTERNAL4V096_MV_16BIT_LSB;
+    gain = 0;
+    debug->print(" 4096 ");  
+  } else {
+    // something wrong, > 1V, return 0
+    return 0;
+  }
+  analogSampleDuration(300);
+  delayMicroseconds(100); // wait at least 60us for the reference change to act
+
+  // read over 20 samples accumulating
+  float result = readSample(scale, 20, gain);
+  float current = result*MAFACTOR*(0.0001*currentScale)+(0.1*currentOffset);
+  debug->print(" 20 samples mv="); debug->print(result); debug->print(" mA="); debug->println(current);
+  result = readSample(scale, 1, gain);
+  current = result*MAFACTOR*(0.0001*currentScale)+(0.1*currentOffset);
+  debug->print(" 1 samples mv=");debug->print(result); debug->print(" mA="); debug->println(current);
+  return (int16_t)current/10; // need output to be in units of 0.01A
 }
 
 
@@ -342,38 +417,36 @@ int16_t readCurrent() {
  * https://www.gotronic.fr/pj2-mf52type-1554.pdf MC53-10K B 3950K
  * 	Supply 	5		
 	Rtop	10		
-C	R in K	V	mW	ADC
--30	181.7	4.7391757955	0.1236091757	3882.3328116849
--20	98.88	4.5407788391	0.208522173	3719.8060249816
--10	56.06	4.2431123221	0.3211559432	3475.95761429
-0	32.96	3.8361266294	0.446476563	3142.5549348231
-10	20	3.3333333333	0.5555555556	2730.6666666667
-20	12.51	2.7787649933	0.6172290078	2276.3642825411
-30	8.048	2.2296099291	0.617688921	1826.4964539007
-40	5.312	1.7345872518	0.5664143325	1420.973876698
-50	3.588	1.3202826023	0.4858266862	1081.575507801
-60	2.476	0.992305226	0.3976856469	812.896441167
-70	1.743	0.7421442562	0.3159943184	607.9645746402
-80	1.25	0.5555555556	0.2469135802	455.1111111111
-90	0.911	0.4174686097	0.1913063008	341.9902850335
-100	0.6744	0.3158959754	0.147968961	258.7819830623
-110	0.5066	0.2410865551	0.1147310049	197.4981059524
+C	R in K	V	ADC
+-10	56.06	4.2431123221	4243.1123221314
+0	32.96	3.8361266294	3836.1266294227
+10	20	3.3333333333	3333.3333333333
+20	12.51	2.7787649933	2778.7649933363
+30	8.048	2.2296099291	2229.609929078
+40	5.312	1.7345872518	1734.5872518286
+50	3.588	1.3202826023	1320.2826022962
+60	2.476	0.992305226	992.305226034
+70	1.743	0.7421442562	742.1442561526
+80	1.25	0.5555555556	555.5555555556
+90	0.911	0.4174686097	417.46860966
+100	0.6744	0.3158959754	315.8959754178
+110	0.5066	0.2410865551	241.0865551177
 
  */
 const int16_t ntcTable[] PROGMEM= {
-3476,
-3143,
-2731,
-2276,
-1826,
-1421,
-1082,
-813,
-608,
-455,
-342,
-259,
-197
+4243,
+3836,
+3333,
+2779,
+2230,
+1735,
+1320,
+992,
+742,
+556,
+417,
+316,
+241
   };
 #define NTC_TABLE_LENGTH 13
 #define MIN_NTC_TEMPERATURE -10.0
@@ -387,7 +460,17 @@ int16_t readTemperature() {
   dw = eeprom_read_word((const uint16_t *)HR_TEMPERATURE_OFFSET);
   int16_t temperatureOffset = (int16_t)(0xffff&dw);
 
-  int16_t reading = analogRead(ADC_NTC);
+  
+  
+
+  // scale for supply voltage, which should be 5V
+  // 5v / 10 = 0.5v,  at 0.00025v/LSB = 5V would be 2000
+  // unforotunately must do this as float 
+  analogReference(INTERNAL4V096); // 1mV per LSB
+  delayMicroseconds(100); // wait at least 60us for the reference change to act
+  analogSampleDuration(300);
+  int16_t reading = analogReadEnh(PIN_PA3, 12, 1);
+
   float temp = MAX_NTC_TEMPERATURE;
   int16_t cvp = ((int16_t)pgm_read_dword(&ntcTable[0]));
   if ( reading > cvp ) {
@@ -396,19 +479,29 @@ int16_t readTemperature() {
     for (int i = 1; i < NTC_TABLE_LENGTH; i++) {
       int16_t cv = ((int16_t)pgm_read_dword(&ntcTable[i]));
       if ( reading > cv ) {
-        temp = ((i-1)*NTC_TABLE_STEP)+((cvp-reading)*NTC_TABLE_STEP);
+        temp = ((cvp-reading)*NTC_TABLE_STEP);
         temp /= (cvp-cv);
-        temp += MIN_NTC_TEMPERATURE;
+        temp += ((i-1)*NTC_TABLE_STEP)+MIN_NTC_TEMPERATURE;
         break;
       }
       cvp = cv;
     }
   }
   // perhaps this could be integer arithmetic ?
-  temp += (0.001*temperatureOffset);
-  temp *= (0.001*temperatureScale);
-  temp /= 0.01;
-  return (int16_t) (temp);
+  float outputTemp = temp+(0.001*temperatureOffset);
+  outputTemp *= (0.001*temperatureScale);
+  outputTemp /= 0.01;
+  debug->print("Read Temperature offset=");
+  debug->print(temperatureOffset);
+  debug->print(" scale=");
+  debug->print(temperatureScale);
+  debug->print(" adc=");
+  debug->print(reading);
+  debug->print(" temp=");
+  debug->print(temp);
+  debug->print(" output=");
+  debug->println(outputTemp);
+  return (int16_t) (outputTemp);
 }
 
 
@@ -551,12 +644,16 @@ void loop() {
       // respond with error
   }
   if ( toSend > 0 ) {
+    framesSent++;
     uint16_t crc = crc16(&frameBuffer[0], toSend);
     frameBuffer[toSend++] = (crc>>8)&0xff;
     frameBuffer[toSend++] = (crc&0xff);
     rs485->write(frameBuffer, toSend);
     rs485->flush();
   } 
+
+
+  commandLine.checkCommand();
 
   /*
   uint16_t sc = StackCount();

@@ -1,7 +1,7 @@
 #pragma once
 
 /**
- * @brief Uses Serial1 to speak in txt form rs485 for debugging purposes.
+ * @brief Uses Serial to speak in txt form rs485 for debugging purposes.
  * Otherwise behaves like a normal sei
  */
 
@@ -11,26 +11,26 @@ class DevRS485Class {
     public:
         DevRS485Class() {};
         void begin(uint32_t baud, uint16_t options) { 
-            // ignore since this will have already been set on the Serial1 class
+            // ignore since this will have already been set on the Serial class
         };
         int available() {
             if ( pos > 0 ) {
                 // dont read more while the buffer has data in it.
-                Serial1.print("Buffer has ");
-                Serial1.println(pos);
+                Serial.print("Buffer has ");
+                Serial.println(pos);
                 return pos;
             }
-            if ( !Serial1.available() ) {
+            if ( !Serial.available() ) {
                 return pos;
             }
-            String line = Serial1.readStringUntil("\n");
+            String line = Serial.readStringUntil("\n");
             line.trim();
             char * cline = (char *) line.c_str();            
 
             size_t start = pos;
             if ( cline[0] == ':') {
-                Serial1.print("Modbus Ascii ");
-                Serial1.println(line);
+                Serial.print("Modbus Ascii ");
+                Serial.println(line);
                 // ASCII Modbus
                 char *clineptr = &cline[1];
                 if ( *clineptr == '>') clineptr++;
@@ -48,8 +48,8 @@ class DevRS485Class {
                     readbuffer[pos++] = 0xff&x;
                 }
             } else if ( cline[0] == '$') {
-                Serial1.print("Modbus Decimal ");
-                Serial1.println(line);
+                Serial.print("Modbus Decimal ");
+                Serial.println(line);
                 // fill the buffer up with hex and return the buffer size
                 char *clineptr = &cline[1];
                 if ( *clineptr == '>') clineptr++;
@@ -65,62 +65,62 @@ class DevRS485Class {
                     }
                 }
             } else {
-                Serial1.print("Noop");
-                Serial1.println(line);
+                Serial.print("Noop");
+                Serial.println(line);
                 return pos;
             }
 
             // append the CRC.
             uint16_t crcVal = crc16((const uint8_t *) &readbuffer[start], pos-start);
-            Serial1.print("CRC adding ");
-            Serial1.print(start);
-            Serial1.print(" ");
-            Serial1.print(pos-start);
-            Serial1.print(" ");
+            Serial.print("CRC adding ");
+            Serial.print(start);
+            Serial.print(" ");
+            Serial.print(pos-start);
+            Serial.print(" ");
             if ( crcVal < 0xf) {
-                Serial1.print("000");
+                Serial.print("000");
             } else if (crcVal < 0xff ) {
-                Serial1.print("00");
+                Serial.print("00");
             } else if (crcVal < 0xfff ) {
-                Serial1.print("0");
+                Serial.print("0");
             }
-            Serial1.println(crcVal,HEX);
+            Serial.println(crcVal,HEX);
             readbuffer[pos++] = 0xff&(crcVal>>8);
             readbuffer[pos++] = 0xff&crcVal;
 
-            Serial1.print("Buffer now ");
-            Serial1.print(pos);
-            Serial1.println(" long");
+            Serial.print("Buffer now ");
+            Serial.print(pos);
+            Serial.println(" long");
             for (int i = 0; i < pos; i++) {
                 if (readbuffer[i] < 0xfff ) {
-                    Serial1.print("0");
+                    Serial.print("0");
                 }
-                Serial1.print(readbuffer[i],HEX);
-                Serial1.print(" ");
+                Serial.print(readbuffer[i],HEX);
+                Serial.print(" ");
             }
-            Serial1.println(" ");
+            Serial.println(" ");
             
             if ( cline[1] == '>') {
                 int fails = 0;
                 for(int i = 0; i < pos; i++) {
                     if(readbuffer[i] != writebuffer[i]) {
-                        Serial1.print("Check failed pos ");
-                        Serial1.print(i);
-                        Serial1.print(" ");
+                        Serial.print("Check failed pos ");
+                        Serial.print(i);
+                        Serial.print(" ");
                         if ( readbuffer[i] < 0xf) {
-                            Serial1.print("0");
+                            Serial.print("0");
                         }
-                        Serial1.print(readbuffer[i],HEX);
-                        Serial1.print(" != ");
+                        Serial.print(readbuffer[i],HEX);
+                        Serial.print(" != ");
                         if ( writebuffer[i] < 0xf) {
-                            Serial1.print("0");
+                            Serial.print("0");
                         }
-                        Serial1.println(writebuffer[i],HEX);
+                        Serial.println(writebuffer[i],HEX);
                         fails++;
                     }
                 }
                 if ( fails == 0) {
-                    Serial1.println("Check Ok");
+                    Serial.println("Check Ok");
                 }
                 pos = 0;
                 return 0;
@@ -141,18 +141,18 @@ class DevRS485Class {
             return l;
         };
         void write(uint8_t *buffer, size_t len ) {
-            Serial1.print("<:");
-            Serial1.print(len);
-            Serial1.print(":");
+            Serial.print("<:");
+            Serial.print(len);
+            Serial.print(":");
             for (int i = 0; i < len; ++i) {
                 if ( buffer[i] < 0x0f) {
-                    Serial1.print(0);
+                    Serial.print(0);
                 }
-                Serial1.print(buffer[i],HEX);
+                Serial.print(buffer[i],HEX);
                 writebuffer[i] = buffer[i];
             }
-            Serial1.println(" ");
-            Serial1.print(">");
+            Serial.println(" ");
+            Serial.print(">");
 
         };
         void flush() {

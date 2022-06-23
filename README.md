@@ -19,10 +19,10 @@ Stored in EEPROM, which is typically reset on a firmware upgrade.
 | Offset | Name                          | type  | details                                          |
 |--------|-------------------------------|-------|--------------------------------------------------|
 | 0      | Device Adddress               | int16 | 1-254 modbus address, default is 2               |
-| 1      | Voltage offset adjustment     | int16 | ADC reading offset in bits                       |
-| 2      | Voltage scale adjustment      | int16 | scale in 1/1000th eg 1000 = 1x                   |
-| 3      | Current offset adjustment     | int16 | ADC reading offset in bits                       |
-| 4      | Current scale adjustment      | int16 | scale in 1/1000th eg 1000 = 1x                   |
+| 1      | Voltage offset adjustment     | int16 | Offset in 0.1mv steps eg 10 = 1mV                |
+| 2      | Voltage scale adjustment      | int16 | scale in 1/10000th eg 10000 = 1x                 |
+| 3      | Current offset adjustment     | int16 | offset in 0.1mA steps eg 10 = 1mA                |
+| 4      | Current scale adjustment      | int16 | scale in 1/10000th eg 10000 = 1x                 |
 | 5      | Temperature offset adjustment | int16 | offset in C in 1/1000th eg 1000 = +1C            |
 | 6      | Temperature scale adjustment  | int16 | scale in C in 1/1000th eg 1000 = 1x              |
 | 7      | Serial Number                 | int16 | Device serial number, once set cannot be changed |
@@ -50,30 +50,19 @@ Programmming using jtag2udpi on an Arduino Uno with avrdude.conf setup for the A
 
 # Voltage
 
-            12V measured with a 22K/10K divider.
-            Current 
-            100A/75mA shunt
-            Through a 100K/200K divider to take 75mV to 50mV so that the ranve of the MAX9918 is not exceeded.
-            MAX9918 Gain  (1 + 47000/(1000)) = 48, FSD 0.05*(1 + 47000/(1000)) = 2.4V 
+The ATTiny ADC in 16bit using 4096 refrence through aa 32K/10K divider, gives withing 10mv of a 4 digit multi meter after calibration setting (0.9954 register 2 set to 9954). Hard to tell which is more accutage, probably the ADC. Voltage is stable with the LSB changing +- 1 or 2.
 
-            Max = 2.5 + 2.4 = 4.9
-            Min = 2.5 - 2.4 = 0.1
+# Current
 
-            The 8224 has a PGA with gains of 1,2,4,8,16 all 12bit single ended.
+Multiple frustrating attempts with a current amplifier, eventually abandoned.
 
-            1x 5V resolution 0.001220703125 mV
-            2x 2.5V 2.5/4096 0.0006103515625 mV
-            4x 1.25 1.25/4096 0.0003051757812 mV
-            8x 0.625 0.625/4096 0.0001525878906 mV
-            16x 0.3125 0.3125/4096 0.00007629394531 mV
+The originam MAX9918 had an unstable 75mV offset from the reference resistors at 0A which would not go, chip might have been damaged during soldering or the EP ground plane was not good enough.
 
-            The code will autoscale, so max resolution will be +-2 bits or 
-            0.00007629394531*5/48 at MAX9918 input
-            100/0.050*(0.00007629394531*5/48) at MAX9918 input
-            15mA.
-            3.1mA per bit.
+2x INA169 that I had from years ago could not be made to amplify the input correctly at the required 47x gain. Looking back I had tried INA169 before and had problems eventually abandoning.
 
+Now trying the Attiny3224 ADC + PGA at 16x which measures down to 0.0019mV perbit below 64mV differntial on the 16bit range with a 1024mV refrence, however this might really be 0.015625mV resolution as the 16 bit is oversampling 12bit. If it is, this represents a resolution of +-20mA which is perfectly reasonable for a 100A/75mV shunt. Quick testing indicates this is stable and repeatable with 10R on the input lines for protection from misconnection and 100nF accross the ADC inputs to remove high frequency components.
 
+If that fails I will use one of the Alegro Hall chips, althought I prefer the simplicity of a shunt.
 
 # debugging
 
@@ -99,10 +88,15 @@ Which checks exercises the RS485 protocol using test patterns checking the respo
 Currently using jtag2udpi, via an Uno, but setting fuses seems hard
 Needs a modified avrdude.conf file to add support for the attiny3224
 pio run -t fuse -e attiny3224 does appear to work.
-Have not tried changing the values of the fuses.
+
+Fuses must be set to ensure the chip clock speed matches the compiled code. This only needs to be done once per chip.
+It its not done the serial output doesnt sync with the baud rate and garbage is seen on the serial line.
+
+    pio run -t fuses -e attiny3224
+
 Looking at megaTinyCore support in the Arduino IDE using SerialUDPI is much better and more advanced.
 
-    pio run -t upload -e attiny322 
+    pio run -t upload -e attiny3224 
 
 works ok for the moment.
 
@@ -119,27 +113,31 @@ In outline.
             |     AMS1117                           E|
             ------------------------------------------     
 
-            a = RS485 A
-            b = RS485 B
-            c = GND
-            d = Vin (12v)
+            a = GND
+            b = Vin (12v)
+            c = RS485 A
+            d = RS485 B
 
             1 = GND
             2 = +5V
-            3 = Debug RX
-            4 = Debug TX
-            5 = UDPI
+            3 = UDPI
+            4 = Debug RX
+            5 = Debug TX
 
-            A = Shunt -
-            B = Shunt +
-            C = Battery +Ve
-            D = NTC
-            E = GND
+            A = Battery +Ve
+            B = Shunt -
+            C = Shunt +
+            D = GND
+            E = NTC
 
 
 # TODO
 
-* [ ] Check MAX9918 amplifier
+* [x] Check MAX9918 amplifier - Abandoned using MAX9918 as it had 75mV offset from its reference point and a lot of instability. Have switched to a pair of INA196 current amplifiers which so far draw much less current and seem stable
+* [x] Test temperature
+* [xc] Test voltage
+* [ ] Test current
+* [ ] Test RS485 
 * [ ] Write Python Modbus RTU Controller to test for real.
 * [ ] Calibrate
 * [ ] Integrate with CanDiagnose controler to act as ModBus Controller for 1..n battery sensors.
