@@ -130,14 +130,24 @@ In outline.
             D = GND
             E = NTC
 
+# Test client
+
+in testclient/ requires python3.
+install with 
+
+    pip install -r requirements.txt
+
+run with 
+
+    python3 batterymon.py
 
 # TODO
 
 * [x] Check MAX9918 amplifier - Abandoned using MAX9918 as it had 75mV offset from its reference point and a lot of instability. Have switched to a pair of INA196 current amplifiers which so far draw much less current and seem stable
 * [x] Test temperature
-* [xc] Test voltage
-* [ ] Test current
-* [ ] Test RS485 
-* [ ] Write Python Modbus RTU Controller to test for real.
+* [x] Test voltage
+* [ ] Test current - switched to direct to ADC which gives good 0mA stability, need to verify linearit
+* [x] Test RS485 
+* [x] Write Python Modbus RTU Controller to test for real.
 * [ ] Calibrate
 * [ ] Integrate with CanDiagnose controler to act as ModBus Controller for 1..n battery sensors.

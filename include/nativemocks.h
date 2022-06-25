@@ -13,7 +13,7 @@ typedef unsigned char byte;
 
 #define digitalWrite(pin,level)  std::cout << "Digital pin:" << pin << " level:" << level << std::endl
 
-#define CRC16_IBM                   0x8005
+#define CRC16                   0x1021
 #define HIGH 1
 #define LOW 0
 #define INPUT 1
@@ -181,7 +181,7 @@ class SerialClass {
             }
 
             // append the CRC.
-            uint16_t crcVal = crc16((const uint8_t *) &readbuffer[start], pos-start, CRC16_IBM, 0, 0, false, false);
+            uint16_t crcVal = crc16((const uint8_t *) &readbuffer[start], pos-start, CRC16, 0, 0, false, false);
             printf("CRC adding %ld  for %ld as %X \n",start, pos-start, crcVal);
             readbuffer[pos++] = 0xff&(crcVal>>8);
             readbuffer[pos++] = 0xff&crcVal;

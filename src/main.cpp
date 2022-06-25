@@ -1,3 +1,8 @@
+
+
+
+
+
 #ifdef NATIVE
 #include "nativemocks.h"
 #include "holdingregisters.h"
@@ -60,21 +65,48 @@ RAM:   [=         ]  11.7% (used 360 bytes from 3072 bytes)
 Flash: [====      ]  43.5% (used 14245 bytes from 32768 bytes)
 Building .pio/build/attiny3224/firmware.hex
 
+Clock speed = 16000000L
+Oscillator = internal
+BOD level = 2.6v
+Save EEPROM = yes
+UPDI pin mode = updi
+-------------------------
+Using manually specified: /dev/cu.wchusbserial26220
+
+Selected fuses:
+-------------------------
+[fuse0 / wdtcfg   = 0x00]
+[fuse1 / bodcfg   = 0x54]
+[fuse2 / osccfg   = 0x01]
+[fuse4 / tcd0cfg  = 0x00]
+[fuse5 / syscfg0  = 0xC5]
+[fuse6 / syscfg1  = 0x06]
+[fuse7 / append   = 0x00]
+[fuse8 / bootend  = 0x00]
+[lock  / lockbit  = 0xC5]
+-------------------------
+
 */
+/* definition to expand macro then apply to pragma message */
+#define VALUE_TO_STRING(x) #x
+#define VALUE(x) VALUE_TO_STRING(x)
+#define VAR_NAME_VALUE(var) #var "="  VALUE(var)
 
-
+#pragma message(VAR_NAME_VALUE(CLOCK_TUNE_INTERNAL))
+#pragma message(VAR_NAME_VALUE(F_CPU))
 
 #define DEVICE_TYPE 0x01
 #define DEVICE_ON 0xff
 
 
-#define FRAME_START_SILENCE 3645  // 3645uS
+#define FRAME_START_SILENCE 3645  // 3645uS or 3.5 chars at 9600 baud
 #define QUERY_FRAME_LEN 12
 #define RESPONSE_FRAME_LEN 20 // address + function + count + 3xfloats (4 bytes ) + 2crc = 3+12+2 = 17
 #define MAX_REGISTER_COUNT 6
 #define MAX_INPUT_REGISTER 3
 #define MAX_HOLDING_REGISTER 8
 byte frameBuffer[RESPONSE_FRAME_LEN];
+uint8_t readFramePos = 0;
 
 
 
@@ -114,21 +146,23 @@ uint16_t  framesIgnored=0;
 uint16_t  framesErrorSent=0;
 
 
-// CRC POLYNOME = x15 + 1 =  1000 0000 0000 0001 = 0x8001
-#define CRC16_IBM                   0x8005
 uint16_t crc16(const uint8_t *array, uint16_t length)
 {
-  uint16_t crc = 0x00;
+  uint16_t crc = 0xffff;
   while (length--) 
   {
+    if ((length & 0xFF) == 0) yield();  // RTOS
     uint8_t data = *array++;
+    data = (((data & 0xAA) >> 1) | ((data & 0x55) << 1));
+    data = (((data & 0xCC) >> 2) | ((data & 0x33) << 2));
+    data =          ((data >> 4) | (data << 4));
     crc ^= ((uint16_t)data) << 8;
     for (uint8_t i = 8; i; i--) 
     {
       if (crc & (1 << 15))
       {
         crc <<= 1;
-        crc ^= CRC16_IBM;
+        crc ^= 0x8005;
       }
       else
       {
@@ -136,6 +170,12 @@ uint16_t crc16(const uint8_t *array, uint16_t length)
       }
     }
   }
+  crc = (((crc & 0XAAAA) >> 1) | ((crc & 0X5555) << 1));
+  crc = (((crc & 0xCCCC) >> 2) | ((crc & 0X3333) << 2));
+  crc = (((crc & 0xF0F0) >> 4) | ((crc & 0X0F0F) << 4));
+//  crc = (( crc >> 8) | (crc << 8));
+//  crc ^= endmask;
+
   return crc;
 }
 
@@ -149,7 +189,7 @@ void loadDefaults() {
   uint16_t crcv =  crc16(&eepromContents[0], HR_SIZE-2);
   uint16_t crcvs = (0xff00&eepromContents[HR_CRC]) | (0xff00&(eepromContents[HR_CRC+1]<<8)); // little endian
   if (crcv != crcvs ||eepromContents[HR_DEVICE_ADDRESS] == 0 ) {
-    debug->printf(F("EPROM not initialised\n"));
+    debug->print(F("EPROM not initialised"));
     for(uint8_t i = 0; i < HR_SIZE-2; i++) {
       eepromContents[i] = pgm_read_byte_near(epromDefaultValues+i);
     }
@@ -158,7 +198,12 @@ void loadDefaults() {
     eepromContents[HR_CRC+1] = 0xff&(crcv>>8); // little endian
     eeprom_update_block(&eepromContents[0], (void*)0, HR_SIZE);
   } else {
-    debug->printf(F("EPROM initialised %d = %d  device %d\n"),crcv, crcvs, eepromContents[HR_DEVICE_ADDRESS]);
+    debug->print(F("EPROM initialised "));
+    debug->print(crcv);
+    debug->print(F(" = "));
+    debug->print(crcvs);
+    debug->print(F("  device "));
+    debug->println(eepromContents[HR_DEVICE_ADDRESS]);
   }
   deviceAddress = eepromContents[HR_DEVICE_ADDRESS];
 }
@@ -172,16 +217,14 @@ void loadDefaults() {
 
 
 void setup() {
-
-  SERIAL_RS485; // enable RS485 flow control on PA4/XDIR/Pin 2 
-  rs485->begin(9600, SERIAL_8N1);
+  rs485->begin(9600, SERIAL_8N1 | SERIAL_RS485);
   debug->begin(9600, SERIAL_8N1);
   pinMode(PIN_PA3, INPUT); // NTC
   pinMode(PIN_PA5, INPUT); //Sense -
   pinMode(PIN_PA6, INPUT); // Sense +
   pinMode(PIN_PA7, INPUT); // Bat
 
-  debug->printf(F("Starting Battery Monitor"));
+  debug->println(F("Starting Battery Monitor"));
   frameBuffer[RESPONSE_FRAME_LEN-1] = 0xee;
 
 
@@ -189,7 +232,17 @@ void setup() {
   loadDefaults();
 }
 
-
+void dumpFrame(uint8_t size) {
+  for(uint8_t i = 0; i < size; i++) {
+    if (frameBuffer[i] < 16) {
+      debug->print(" 0x0");
+    } else {
+      debug->print(" 0x");
+    }
+    debug->print(frameBuffer[i],HEX);
+  }
+  debug->print("\n");
+}
 
 /**
  * @brief read a modbus query from the serial line
@@ -199,13 +252,13 @@ void setup() {
 int8_t readQuery() {
   static unsigned long startFrameTimeout = micros();
   static bool readingFrame = true;
-  static uint8_t readFramePos = 0;
   if ( rs485->available() > 0) {
     // was there silence ?
     unsigned long now = micros();
     if ( now > startFrameTimeout ) {
       if ( readFramePos > 0) {
-        debug->printf(F("New Frame\n"));
+        debug->print(F("New Frame "));
+        debug->println(now-startFrameTimeout);
       }
       // new frame
       readFramePos = 0;
@@ -213,11 +266,18 @@ int8_t readQuery() {
 
     }
     // restart startFrameTimeout
-    startFrameTimeout = now + FRAME_START_SILENCE;
-    size_t n = rs485->readBytes(&frameBuffer[readFramePos], QUERY_FRAME_LEN-readFramePos);
+    while(readFramePos < QUERY_FRAME_LEN) {
+      delayMicroseconds(1041); // 1 char at 9600 baud
+      int16_t b = rs485->read();
+      if (b == -1) {
+        break;
+      } else {
+        frameBuffer[readFramePos++] = 0xff&b;
+      }
+    }
+    startFrameTimeout = micros() + FRAME_START_SILENCE;
     if (readingFrame) {
-        readFramePos += n;
-        debug->printf(F("Frame now %d\n"), readFramePos);
+        dumpFrame(readFramePos);
         uint8_t frameLength = QUERY_FRAME_LEN;
         if (readFramePos > FRAME_OFFSET_FUNCTION_CODE) {
           switch(frameBuffer[FRAME_OFFSET_FUNCTION_CODE]) {
@@ -225,12 +285,18 @@ int8_t readQuery() {
             case 4: 
             case 6: 
               frameLength = 8;
+
               break;
             case 17: 
               frameLength = 4; 
               break;
           }
-          debug->printf(F("Frame now %d, function %d, expecting %d\n"), readFramePos, frameBuffer[FRAME_OFFSET_FUNCTION_CODE], frameLength );
+          debug->print(F("Frame now "));
+          debug->print(readFramePos);
+          debug->print(F(", function "));
+          debug->print(frameBuffer[FRAME_OFFSET_FUNCTION_CODE]);
+          debug->print(F(", expecting "));
+          debug->println(frameLength );
         }
 
         if (readFramePos >= frameLength) {
@@ -240,14 +306,23 @@ int8_t readQuery() {
             uint16_t crcFrameValue = getUInt16(frameLength-2);
              if (crcValue == crcFrameValue ) {
                 framesRecieved++;
+                debug->println("Full frame, CRC Ok");
                 return frameBuffer[FRAME_OFFSET_FUNCTION_CODE]; 
              } else {
                 framesErrorRecieved++;
-                debug->printf(F("CRC from 0 for %d is %X %X "), FRAME_OFFSET_QUERY_CHECKSUM, crcValue, crcFrameValue);
+                debug->print(F("CRC from 0 for "));
+                debug->print(frameLength-2);
+                debug->print(F(" is calculated: "));
+                debug->print(crcValue,HEX);
+                debug->print(F("  recieved: "));
+                debug->println(crcFrameValue,HEX);
              }           
           } else {
             framesIgnored++;
-            debug->printf(F(" Frame Address %d Device address %d\n"), frameBuffer[FRAME_OFFSET_DEVICE_ADDRESS], deviceAddress );
+            debug->print(F(" Frame Address  "));
+                debug->print(frameBuffer[FRAME_OFFSET_DEVICE_ADDRESS]);
+                debug->print(F(" Device address "));
+                debug->println(deviceAddress);
           }
           readFramePos = 0;
           // any more bytes are noise until we see > 3.5 chars of silence.
@@ -617,29 +692,34 @@ int8_t writeSlaveId() {
 
 void loop() {
   int8_t functionCode = readQuery();
+  unsigned long start = micros();
   int8_t toSend = -1;
   switch (functionCode) {
     case 0:
      // noop
       break;
     case 3: // read holding
-      debug->printf(F("read holding\n"));
       toSend = readHolding();
+      debug->print(F("read holding "));
+      debug->println(micros()-start);
       break;
     case 4: // read input
-      debug->printf(F("read input\n"));
       toSend = readInput();
+      debug->print(F("read input "));
+      debug->println(micros()-start);
       break;
     case 6: // write single holding
-      debug->printf(F("write holding\n"));
       toSend = writeHolding();
+      debug->print(F("write holding "));
+      debug->println(micros()-start);
       break;
     case 17: // report slave ID
-      debug->printf(F("report slave\n"));
       toSend = writeSlaveId();
+      debug->print(F("report slave "));
+      debug->println(micros()-start);
       break;
     default:
-      debug->printf(F("unexpected function\n"));
+      debug->println(F("unexpected function"));
       toSend = sendFunctionCodeError(EXCEPTION_ILEGAL_FUNCTION);
       // respond with error
   }
@@ -650,6 +730,8 @@ void loop() {
     frameBuffer[toSend++] = (crc&0xff);
     rs485->write(frameBuffer, toSend);
     rs485->flush();
+
+//    dumpFrame(toSend);
   } 
 
 
