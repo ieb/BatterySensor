@@ -6,6 +6,8 @@ import struct
 from configparser import RawConfigParser
 from pymodbus.client.sync import ModbusSerialClient as ModbusClient
 from pymodbus.exceptions import ModbusIOException
+from pymodbus.constants import Endian
+from pymodbus.payload import BinaryPayloadDecoder
 
 settings = RawConfigParser()
 settings.read(os.path.dirname(os.path.realpath(__file__)) + '/batterymon.cfg')
@@ -66,33 +68,55 @@ def dumpAsAscii(registers):
     print(len(registers), b)
     print(b.decode('ascii'))
 
+def toInt(row):
+    decoder = BinaryPayloadDecoder.fromRegisters(row.registers, Endian.Big, wordorder=Endian.Little)
+    return decoder.decode_16bit_int()
+
 
 # get the serial number
+print("Holding Registers")
 row = client.read_holding_registers(0, count=1, unit=unit)
-print("Exception", row)
-print("Device address:", row.registers[0])
+print("          Device address (0000):", row.registers[0])
 row = client.read_holding_registers(1, count=1, unit=unit)
-print("Voltage Offset:", 0.1*row.registers[0], "mV")
+print("          Voltage Offset (0001):", 0.1*toInt(row), "mV")
 row = client.read_holding_registers(2, count=1, unit=unit)
-print("Voltage Scale:", 0.0001*row.registers[0])
+print("           Voltage Scale (0002):", 0.0001*toInt(row))
 row = client.read_holding_registers(3, count=1, unit=unit)
-print("Current Offset:", 0.1*row.registers[0], "mA")
+print("          Current Offset (0003):", 0.1*toInt(row), "mA")
 row = client.read_holding_registers(4, count=1, unit=unit)
-print("Current Scale:", 0.0001*row.registers[0])
+print("           Current Scale (0004):", 0.0001*toInt(row))
 row = client.read_holding_registers(5, count=1, unit=unit)
-print("Temperature Offset:", 0.001*row.registers[0])
+print("      Temperature Offset (0005):", 0.001*toInt(row))
 row = client.read_holding_registers(6, count=1, unit=unit)
-print("Temperature Scale:", 0.001*row.registers[0])
+print("       Temperature Scale (0006):", 0.001*toInt(row))
 row = client.read_holding_registers(7, count=1, unit=unit)
-print("Serial Number:", row.registers[0])
+print("          Serial Number  (0007):", row.registers[0])
 
 
+print("Input Registers")
+
+row = client.read_input_registers(0, count=1, unit=unit)
+print("                 Voltage (0000):", 0.01*toInt(row), "V")
 row = client.read_input_registers(1, count=1, unit=unit)
-print("Voltage:", 0.01*row.registers[0], "V")
+print("                 Current (0001):", 0.01*toInt(row), "A")
 row = client.read_input_registers(2, count=1, unit=unit)
-print("Current:", 0.01*row.registers[0], "A")
-row = client.read_input_registers(3, count=1, unit=unit)
-print("Temperature:", 0.01*row.registers[0], "C")
+print("             Temperature (0002):", 0.01*toInt(row), "C")
+
+# Modbus stats
+print("Modbus Input Registers")
+row = client.read_input_registers(1000, count=1, unit=unit)
+print("                Recieved (1000):", row.registers[0])
+row = client.read_input_registers(1001, count=1, unit=unit)
+print("                    Sent (1001):", row.registers[0])
+row = client.read_input_registers(1002, count=1, unit=unit)
+print("         Errors Recieved (1002):", row.registers[0])
+row = client.read_input_registers(1003, count=1, unit=unit)
+print("                 Ignored (1003):", row.registers[0])
+row = client.read_input_registers(1004, count=1, unit=unit)
+print("             Errors Sent (1004):", row.registers[0])
+row = client.read_input_registers(1005, count=1, unit=unit)
+print("         Buffer Overflow (1005):", row.registers[0])
+
 
 
 

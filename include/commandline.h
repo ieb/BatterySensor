@@ -1,10 +1,17 @@
 #pragma once
 
+#include "holdingregisters.h"
+#include "modbus.h"
+
 // symbols from main.cpp so we dont have to get complicated.
-extern int16_t readTemperature();
-extern int16_t readVoltage();
-extern int16_t readCurrent();
+extern int16_t readTemperature(bool logEnabled);
+extern int16_t readVoltage(bool logEnabled);
+extern int16_t readCurrent(bool logEnabled);
+extern void setDiagnostics(bool enabled);
 extern void loadDefaults();
+
+
+/*
 extern uint16_t crc16(const uint8_t *array, uint16_t length);
 extern uint8_t deviceAddress;
 extern uint16_t framesRecieved;
@@ -12,13 +19,13 @@ extern uint16_t framesSent;
 extern uint16_t framesErrorRecieved;
 extern uint16_t framesIgnored;
 extern uint16_t framesErrorSent;
-
+*/
 
 
 
 class CommandLine {
     public:
-        CommandLine(UartClass * io) : io{io} {};
+        CommandLine(UartClass * io, Modbus * modbus) : io{io}, modbus{modbus} {};
 
 
         void checkCommand() {
@@ -28,16 +35,23 @@ class CommandLine {
                 switch ( chr ) {
                     case 'h': showHelp(); break;
                     case 's': showStatus(); break;
-                    case 't': readTemperature();  break;
-                    case 'v': readVoltage();  break;
-                    case 'c': readCurrent();  break;
+                    case 't': readTemperature(true);  break;
+                    case 'v': readVoltage(true);  break;
+                    case 'c': readCurrent(true);  break;
                     case 'S': doSetup(); break;
                     case 'F': loadDefaults(); break;
+                    case 'd': toggleDiagnostics(); break;
                 }
             }
         }
     private:
         UartClass * io;
+        Modbus * modbus;
+        bool diagnosticsEnabled = false;
+        void toggleDiagnostics() {
+            diagnosticsEnabled = !diagnosticsEnabled;
+            setDiagnostics(diagnosticsEnabled);
+        };
 
         bool readInt(int16_t *v) {
             String line = io->readStringUntil("\n");
@@ -99,12 +113,12 @@ class CommandLine {
             changed = updateHoldingRegister(epromContents, HR_SERIAL_NUMBER) || changed;
             if ( changed ) {
                 // update CRC and save.
-                uint16_t crcv =  crc16(&epromContents[0], HR_SIZE-2);
+                uint16_t crcv =  modbus->crc16(&epromContents[0], HR_SIZE-2);
                 epromContents[HR_CRC] = 0xff&(crcv);
                 epromContents[HR_CRC+1] = 0xff&(crcv>>8); // little endian
                 eeprom_update_block((const void*)&epromContents[0], (void*)0, HR_SIZE);
                 // update device address, which may have changed.
-                deviceAddress = epromContents[HR_DEVICE_ADDRESS];
+                modbus->setDeviceAddress(epromContents[HR_DEVICE_ADDRESS]);
             }
         };
 
@@ -113,6 +127,7 @@ class CommandLine {
             io->println(F("Battery Monitor - key presses"));
             io->println(F("  - 'h' or '?' to show this message"));
             io->println(F("  - 's' show status"));
+            io->println(F("  - 'd' toggle diagnostics"));
             io->println(F("  - 't' read temperature"));
             io->println(F("  - 'v' read voltage"));
             io->println(F("  - 'c' read current"));
@@ -139,17 +154,7 @@ class CommandLine {
             io->print(F("Serial Number  :"));
             io->println((int16_t)eeprom_read_word((const uint16_t *)HR_SERIAL_NUMBER));
 
-
-            io->print(F("Frames Recieved:"));
-            io->print(framesRecieved);
-            io->print(F(" Sent:"));
-            io->print(framesSent);
-            io->print(F(" Ignored:"));
-            io->print(framesErrorRecieved);
-            io->print(F(" Ignored:"));
-            io->print(framesErrorSent);
-            io->print(F(" Ignored:"));
-            io->println(framesIgnored);
+            modbus->dumpStatus();
             io->print((F("MCU V=")));
             io->print(readMCUVoltage());
             io->print((F("mV T=")));

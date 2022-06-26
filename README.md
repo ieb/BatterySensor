@@ -30,11 +30,17 @@ Stored in EEPROM, which is typically reset on a firmware upgrade.
 
 # Input Registers - function 4 to read
 
-| Offset | Name        | type  | details     |
-|--------|-------------|-------|-------------|
-| 0      | Voltage     | int16 | Units 0.01V |
-| 1      | Current     | int16 | Units 0.01A |
-| 2      | Temperature | int16 | 1 = 0.01C   |
+| Offset | Name            | type   | details                                 |
+|--------|-----------------|--------|-----------------------------------------|
+| 0      | Voltage         | int16  | Units 0.01V                             |
+| 1      | Current         | int16  | Units 0.01A                             |
+| 2      | Temperature     | int16  | 1 = 0.01C                               |
+| 1001   | Recieved        | uint16 | count of frames recieved                |
+| 1002   | Sent            | uint16 | count off frames send                   |
+| 1003   | Errors Recieved | uint16 | count off frames recieved with errors   |
+| 1004   | Ignored         | uint16 | count off frames dropped                |
+| 1005   | Errors Sent     | uint16 | count off error frames send             |
+
 
 # Other functions
 * 17 - report - 4 bytes, uint8 device type (0x01), uint device on (0xff), int16 serial number (0xXXXX)
@@ -146,7 +152,7 @@ run with
 * [x] Check MAX9918 amplifier - Abandoned using MAX9918 as it had 75mV offset from its reference point and a lot of instability. Have switched to a pair of INA196 current amplifiers which so far draw much less current and seem stable
 * [x] Test temperature
 * [x] Test voltage
-* [ ] Test current - switched to direct to ADC which gives good 0mA stability, need to verify linearit
+* [x] Test current - switched to direct to ADC which gives good 0mA stability, need to verify linearit
 * [x] Test RS485 
 * [x] Write Python Modbus RTU Controller to test for real.
 * [ ] Calibrate
