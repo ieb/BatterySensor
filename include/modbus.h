@@ -155,6 +155,7 @@ class Modbus {
                                 debug->print(frameBuffer[FRAME_OFFSET_DEVICE_ADDRESS]);
                                 debug->print(F(" Device address "));
                                 debug->println(deviceAddress);
+                                dumpFrame(8);
                             }
                         } else if ( readFramePos > FRAME_OFFSET_FUNCTION_CODE ) {
                             uint8_t frameLength = QUERY_FRAME_LEN;

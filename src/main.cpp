@@ -117,7 +117,7 @@ void loadDefaults() {
   uint8_t eepromContents[HR_SIZE];
   eeprom_read_block((void*)&eepromContents[0], (const void*)0, HR_SIZE);
   uint16_t crcv =  modbus.crc16(&eepromContents[0], HR_SIZE-2);
-  uint16_t crcvs = (0xff00&eepromContents[HR_CRC]) | (0xff00&(eepromContents[HR_CRC+1]<<8)); // little endian
+  uint16_t crcvs = (0xff&eepromContents[HR_CRC]) | (0xff00&(eepromContents[HR_CRC+1]<<8)); // little endian
   if (crcv != crcvs ||eepromContents[HR_DEVICE_ADDRESS] == 0 ) {
     debug->print(F("EPROM not initialised"));
     for(uint8_t i = 0; i < HR_SIZE-2; i++) {
@@ -438,7 +438,7 @@ int8_t readInput() {
 int8_t readHolding() {
     int16_t reg = modbus.getRegisterStart(); 
     int16_t count = modbus.getRegisterCount(); 
-    if ( count > MAX_REGISTER_COUNT ) {
+    if ( count > MAX_HOLDING_REGISTER ) {
         modbus.sendFunctionCodeError(EXCEPTION_ILEGAL_DATA_VALUE);
     } else if ( (reg+count-1)*2 >= HR_SIZE ) {
         modbus.sendFunctionCodeError(EXCEPTION_ILEGAL_DATA_ADDRESS);

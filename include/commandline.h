@@ -39,6 +39,7 @@ class CommandLine {
                     case 'v': readVoltage(true);  break;
                     case 'c': readCurrent(true);  break;
                     case 'S': doSetup(); break;
+                    case 'R': doReset(); break;
                     case 'F': loadDefaults(); break;
                     case 'd': toggleDiagnostics(); break;
                 }
@@ -51,7 +52,17 @@ class CommandLine {
         void toggleDiagnostics() {
             diagnosticsEnabled = !diagnosticsEnabled;
             setDiagnostics(diagnosticsEnabled);
+            if ( diagnosticsEnabled ) {
+                Serial.println(F("Diagnositcs enabled"));
+            } else {
+                Serial.println(F("Diagnostics disabled"));
+            }
         };
+
+        void doReset() {
+            _PROTECTED_WRITE(RSTCTRL.SWRR, 1);
+        };
+
 
         bool readInt(int16_t *v) {
             String line = io->readStringUntil("\n");
@@ -131,6 +142,7 @@ class CommandLine {
             io->println(F("  - 't' read temperature"));
             io->println(F("  - 'v' read voltage"));
             io->println(F("  - 'c' read current"));
+            io->println(F("  - 'R' restart"));
             io->println(F("  - 'S' setup"));
             io->println(F("  - 'F' factory reset"));
         };
